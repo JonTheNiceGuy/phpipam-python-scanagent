@@ -1,3 +1,4 @@
+#! /usr/bin/env python3
 import re
 import sys
 import time
@@ -15,6 +16,10 @@ api_token = parser.read_configuration_variable('IPAM_API_TOKEN')
 agent_code = parser.read_configuration_variable('IPAM_API_AGENT_CODE')
 sleep_duration = parser.read_configuration_variable('IPAM_SLEEP_DURATION', default_value='5m')
 always_update_seen_hosts = parser.read_configuration_variable('IPAM_ALWAYS_UPDATE', default_value='1')
+
+if server is None or api_client is None or api_token is None or agent_code is None:
+    sys.stderr.write(f"Missing required environment variables. Halting.\n")
+    exit(1)
 
 print(f"Server: {server}, api_client: {api_client}, api_token: {api_token}, agent_code: {agent_code}, sleep_duration: {sleep_duration}, always_update_seen_hosts: {always_update_seen_hosts}")
 
