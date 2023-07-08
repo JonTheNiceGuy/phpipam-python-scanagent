@@ -2,6 +2,7 @@
 import re
 import sys
 import time
+import pytz
 import nmap3
 import logging
 import requests
@@ -128,8 +129,11 @@ def createPhpIpam(
     response = requests.post(f"https://{server}/api/{api_client}/{endpoint}/", headers=headers, data=data, verify=secure)
     return response.json()
 
-def now():
-    return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+def nowTime():
+    try:
+        return str(datetime.now(pytz.UTC).strftime('%Y-%m-%d %H:%M:%S'))
+    except:
+        return "0000-00-00 00:00:00"
 
 while True:
     scanagents = getFromPhpIpam(server, api_client, api_token, 'tools/scanagents')
@@ -204,16 +208,30 @@ while True:
                                     address_id = addresses_list[key]['id']
                                     break
 
-                            if ip_found: # Update
+                            if ip_found:  # Update
                                 if always_update_seen_hosts == '1' or addresses_list[ip]['tag'] != online_tag:
-                                    data = {'hostname': hostname, 'tag': f"{online_tag}", 'lastSeen': now()}
-                                    print(updatePhpIpam(server, api_client, api_token, 'addresses', address_id, data))
-                                    update_online+=1
+                                    thisTime = str(nowTime())
+                                    data = {
+                                        'hostname': hostname,
+                                        'tag': f"{online_tag}",
+                                        'lastSeen': thisTime
+                                    }
+                                    print(updatePhpIpam(
+                                        server, api_client, api_token, 'addresses', address_id, data))
+                                    update_online += 1
 
                             elif subnet['discoverSubnet'] == '1':
-                                data = {'subnetId': subnet['id'], 'ip': ip, 'hostname': hostname, 'tag': f"{online_tag}", 'lastSeen': now()}
-                                print(createPhpIpam(server, api_client, api_token, 'addresses', data))
-                                add_online+=1
+                                thisTime = str(nowTime())
+                                data = {
+                                    'subnetId': subnet['id'],
+                                    'ip': ip,
+                                    'hostname': hostname,
+                                    'tag': f"{online_tag}",
+                                    'lastSeen': thisTime
+                                }
+                                print(createPhpIpam(server, api_client,
+                                      api_token, 'addresses', data))
+                                add_online += 1
 
                     if addresses_list is not None and len(addresses_list) > 0:
                         for ip in addresses_list:
@@ -229,15 +247,14 @@ while True:
                                 print(updatePhpIpam(server, api_client, api_token, 'addresses', status['id'], data))
                                 update_offline+=1
 
-                if update_online + add_online + update_offline > 0:
-                    print(f"Added: {add_online}, Changed: {update_online} online {update_offline} offline at {now()}")
+                thisTime = str(nowTime())
+                if update_online + add_online + update_offline + update_removed > 0:
+                    print(
+                        f"Added: {add_online}, Changed: {update_online} online {update_offline} offline {update_removed} purged at {thisTime}")
                 else:
-                    print(f"No changes at {now()}")
+                    print(f"No changes at {thisTime}")
                 if subnet['discoverSubnet'] == '1':
-                    now = now()
-                    data = {'lastScan': now, 'lastDiscovery': now}
+                    data = {'lastScan': thisTime, 'lastDiscovery': thisTime}
                 else:
-                    data = {'lastScan': now}
-                updatePhpIpam(server, api_client, api_token, 'subnets', subnet['id'], data)
-                updatePhpIpam(server, api_client, api_token, 'tools/scanagents', scanagent['id'], {'last_access': now()})
+                    data = {'lastScan': thisTime}
     time.sleep(sleep_seconds)
