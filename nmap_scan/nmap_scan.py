@@ -21,6 +21,16 @@ server = parser.read_configuration_variable('IPAM_SERVER')
 api_client = parser.read_configuration_variable('IPAM_API_CLIENT')
 api_token = parser.read_configuration_variable('IPAM_API_TOKEN')
 agent_code = parser.read_configuration_variable('IPAM_API_AGENT_CODE')
+sleep_duration = parser.read_configuration_variable(
+    'IPAM_SLEEP_DURATION', default_value='5m')
+min_time_between_scans = parser.read_configuration_variable(
+    'IPAM_MIN_TIME_BETWEEN_SCANS', default_value='1h')
+always_update_seen_hosts = parser.read_configuration_variable(
+    'IPAM_ALWAYS_UPDATE', default_value='1')
+remove_old_hosts = parser.read_configuration_variable(
+    'IPAM_REMOVE_OLD_HOSTS', default_value='1')
+remove_old_host_delay = parser.read_configuration_variable(
+    'IPAM_REMOVE_OLD_HOST_DELAY', default_value='48h')
 
 logging.info(f"Version: 1.0.0 Author: Jon Spriggs jon@sprig.gs")
 
@@ -30,56 +40,68 @@ if server is None or api_client is None or api_token is None or agent_code is No
 
 logging.info(f"Server: {server}, api_client: {api_client}, api_token: {api_token}, agent_code: {agent_code}, sleep_duration: {sleep_duration}, always_update_seen_hosts: {always_update_seen_hosts}")
 
-sleep_pattern = r'^(([.\d]+)([smh]|))(([.\d]+)([smh])|)(([.\d]+)([smh])|)$'
+def time_match(duration):
+    duration_pattern = r'^(([.\d]+)([smh]|))(([.\d]+)([smh])|)(([.\d]+)([smh])|)$'
+    re_match = re.match(duration_pattern, duration)
+    duration_seconds = 0
 
-sleep_match = re.match(sleep_pattern, sleep_duration)
-sleep_seconds = 0
+    if re_match:
+        if re_match.group(3) == 's':
+            duration_seconds += float(re_match.group(2))
+        if re_match.group(6) == 's':
+            duration_seconds += float(re_match.group(5))
+        if re_match.group(9) == 's':
+            duration_seconds += float(re_match.group(8))
+        if re_match.group(3) == 'm':
+            duration_seconds += (float(re_match.group(2)) * 60)
+        if re_match.group(6) == 'm':
+            duration_seconds += (float(re_match.group(5)) * 60)
+        if re_match.group(9) == 'm':
+            duration_seconds += (float(re_match.group(8)) * 60)
+        if re_match.group(3) == 'h':
+            duration_seconds += (float(re_match.group(2)) * 60 * 60)
+        if re_match.group(6) == 'h':
+            duration_seconds += (float(re_match.group(5)) * 60 * 60)
+        if re_match.group(9) == 'h':
+            duration_seconds += (float(re_match.group(8)) * 60 * 60)
+        if re_match.group(3) == 'h' and re_match.group(6) is not None and len(re_match.group(6)) == 0:
+            duration_seconds += (float(re_match.group(5)) * 60)
+        if re_match.group(3) == 'm' and re_match.group(6) is not None and len(re_match.group(6)) == 0:
+            duration_seconds += float(re_match.group(5))
+        if re_match.group(6) == 'h' and re_match.group(9) is not None and len(re_match.group(9)) == 0:
+            duration_seconds += (float(re_match.group(8)) * 60)
+        if re_match.group(6) == 'm' and re_match.group(9) is not None and len(re_match.group(9)) == 0:
+            duration_seconds += float(re_match.group(8))
+        return duration_seconds
+    else:
+        raise ValueError(
+            f"Invalid format for duration (got {duration}")
 
-if sleep_match:
-    if sleep_match.group(3) == 's':
-        sleep_seconds += float(sleep_match.group(2))
-    if sleep_match.group(6) == 's':
-        sleep_seconds += float(sleep_match.group(5))
-    if sleep_match.group(9) == 's':
-        sleep_seconds += float(sleep_match.group(8))
-    if sleep_match.group(3) == 'm':
-        sleep_seconds += (float(sleep_match.group(2)) * 60)
-    if sleep_match.group(6) == 'm':
-        sleep_seconds += (float(sleep_match.group(5)) * 60)
-    if sleep_match.group(9) == 'm':
-        sleep_seconds += (float(sleep_match.group(8)) * 60)
-    if sleep_match.group(3) == 'h':
-        sleep_seconds += (float(sleep_match.group(2)) * 60 * 60)
-    if sleep_match.group(6) == 'h':
-        sleep_seconds += (float(sleep_match.group(5)) * 60 * 60)
-    if sleep_match.group(9) == 'h':
-        sleep_seconds += (float(sleep_match.group(8)) * 60 * 60)
-    if sleep_match.group(3) == 'h' and sleep_match.group(6) is not None and len(sleep_match.group(6)) == 0:
-        sleep_seconds += (float(sleep_match.group(5)) * 60)
-    if sleep_match.group(3) == 'm' and sleep_match.group(6) is not None and len(sleep_match.group(6)) == 0:
-        sleep_seconds += float(sleep_match.group(5))
-    if sleep_match.group(6) == 'h' and sleep_match.group(9) is not None and len(sleep_match.group(9)) == 0:
-        sleep_seconds += (float(sleep_match.group(8)) * 60)
-    if sleep_match.group(6) == 'm' and sleep_match.group(9) is not None and len(sleep_match.group(9)) == 0:
-        sleep_seconds += float(sleep_match.group(8))
-else:
-    raise ValueError(f"Invalid format for sleep duration (got {sleep_duration}")
-
+sleep_seconds = time_match(sleep_duration)
 logging.info(f"Sleep Duration {sleep_duration} = {sleep_seconds} seconds")
 
+time_between_scans_seconds = time_match(min_time_between_scans)
+logging.info(
+    f"Time between scans {min_time_between_scans} = {time_between_scans_seconds} seconds = {time_between_scans_seconds / 60} minutes")
+
+if remove_old_hosts == '1':
+    remove_old_host_delay_seconds = time_match(remove_old_host_delay)
+    logging.info(
+        f"Remove old host delay {remove_old_host_delay} = {remove_old_host_delay_seconds} seconds = {remove_old_host_delay_seconds / 60} minutes = {remove_old_host_delay_seconds / 60 / 60} hours")
+
 def getFromPhpIpam(
-        server: str,
-        api_client: str,
-        api_token: str,
-        endpoint: str,
-        data: Optional[
-            Union[
-                Mapping[str, str],
-                None
-            ]
-        ] = None,
-        secure = True
-    ):
+    server: str,
+    api_client: str,
+    api_token: str,
+    endpoint: str,
+    data: Optional[
+        Union[
+            Mapping[str, str],
+            None
+        ]
+    ] = None,
+    secure=True
+):
     headers = {
         'token': api_token,
         'Content-Type': 'application/json'
@@ -89,44 +111,80 @@ def getFromPhpIpam(
     else:
         headers.update(data)
 
-    response = requests.get(f"https://{server}/api/{api_client}/{endpoint}", headers=headers, verify=secure)
+    response = requests.get(
+        f"https://{server}/api/{api_client}/{endpoint}", headers=headers, verify=secure)
     return_data = response.json()
     if 'data' in return_data:
         logging.debug(
             f"GET {endpoint} requested; (len: {len(return_data['data'])})")
         return return_data['data']
 
-def updatePhpIpam(
-        server: str,
-        api_client: str,
-        api_token: str,
-        endpoint: str,
-        id: int,
-        data: Mapping[str, str],
-        secure = True
-    ):
+def deletePhpIpam(
+    server: str,
+    api_client: str,
+    api_token: str,
+    endpoint: str,
+    id: int,
+    data: Mapping[str, str],
+    secure=True
+):
     headers = {
         'token': api_token,
         'Content-Type': 'application/x-www-form-urlencoded'
     }
 
-    response = requests.patch(f"https://{server}/api/{api_client}/{endpoint}/{id}/", headers=headers, data=data, verify=secure)
+    response = requests.delete(
+        f"https://{server}/api/{api_client}/{endpoint}/{id}/", headers=headers, data=data, verify=secure)
+    try:
+        logging.debug(
+            f"DELETE {endpoint}/{id} requested with {data}; {response.json()}")
+    except any:
+        logging.error(f"Error in DELETE {endpoint}/{id} / {data}")
+    return response.json()
+
+def updatePhpIpam(
+    server: str,
+    api_client: str,
+    api_token: str,
+    endpoint: str,
+    id: int,
+    data: Mapping[str, str],
+    secure=True
+):
+    headers = {
+        'token': api_token,
+        'Content-Type': 'application/x-www-form-urlencoded'
+    }
+
+    response = requests.patch(
+        f"https://{server}/api/{api_client}/{endpoint}/{id}/", headers=headers, data=data, verify=secure)
+    try:
+        logging.debug(
+            f"PATCH {endpoint}/{id} requested with {data}; {response.json()}")
+    except any:
+        logging.error(f"Error in PATCH {endpoint}/{id} / {data}")
     return response.json()
 
 def createPhpIpam(
-        server: str,
-        api_client: str,
-        api_token: str,
-        endpoint: str,
-        data: Mapping[str, str],
-        secure = True
-    ):
+    server: str,
+    api_client: str,
+    api_token: str,
+    endpoint: str,
+    data: Mapping[str, str],
+    secure=True
+):
     headers = {
         'token': api_token,
         'Content-Type': 'application/x-www-form-urlencoded'
     }
 
-    response = requests.post(f"https://{server}/api/{api_client}/{endpoint}/", headers=headers, data=data, verify=secure)
+    response = requests.post(
+        f"https://{server}/api/{api_client}/{endpoint}/", headers=headers, data=data, verify=secure)
+    try:
+        logging.debug(
+            f"POST {endpoint} requested with {data}; {response.json()}")
+    except any:
+        logging.error(f"Error in POST {endpoint} / {data}")
     return response.json()
 
 def nowTime():
@@ -136,7 +194,8 @@ def nowTime():
         return "0000-00-00 00:00:00"
 
 while True:
-    scanagents = getFromPhpIpam(server, api_client, api_token, 'tools/scanagents')
+    scanagents = getFromPhpIpam(
+        server, api_client, api_token, 'tools/scanagents')
     scanagentId = 0
     for scanagent in scanagents:
         if scanagent['code'] == agent_code and scanagent['id'] is not None:
@@ -159,19 +218,46 @@ while True:
                 offline_tag = tag['id']
 
         for subnet in subnets:
-            if subnet['scanAgent'] == scanagentId and subnet['pingSubnet'] == '1':
+            cidr = f"{subnet['subnet']}/{subnet['mask']}"
+            str_scanAgent = str(subnet['scanAgent'])
+            str_scanagentId = str(scanagentId)
+            str_pingSubnet = str(subnet['pingSubnet'])
+            str_resolveDNS = str(subnet['resolveDNS'])
+            now_timestamp = datetime.now(pytz.UTC).timestamp()
+            scan_gap = time_between_scans_seconds
+            now_less_scan_gap = now_timestamp - scan_gap
+            last_acceptable_scan = datetime.fromtimestamp(now_less_scan_gap)
+            logging.debug(
+                f"Now: {now_timestamp}; Last acceptable scan: {last_acceptable_scan} [{now_less_scan_gap}]")
+            last_timestamp = 0
+            timeLastScan = datetime.fromtimestamp(0)
+            if subnet['lastScan'] is not None:
+                timeLastScan = datetime.strptime(
+                    subnet['lastScan'], '%Y-%m-%d %H:%M:%S')
+                last_timestamp = timeLastScan.timestamp()
+            scan_now = now_less_scan_gap > last_timestamp
+            logging.info(
+                f"Checking Subnet {subnet['id']} : {cidr} '{subnet['description']}'")
+            logging.debug(
+                f"  str_scanAgent({str_scanAgent}) == str_scanagentId({str_scanagentId}) ? {str_scanAgent == str_scanagentId}")
+            logging.debug(
+                f"  str_pingSubnet({str_pingSubnet}) == '1' ? {str_pingSubnet == str('1')}")
+            logging.debug(
+                f"  now_less_scan_gap({now_less_scan_gap}) [{last_acceptable_scan}] > last_timestamp({last_timestamp}) [{subnet['lastScan']}] == {scan_now}")
+            if str_scanAgent == str_scanagentId and str_pingSubnet == str('1') and scan_now:
                 nameservers = ' -n'
-                if subnet['resolveDNS'] == '1':
+                if str_resolveDNS == str('1'):
                     nameservers = ''
                     if 'nameservers' in subnet:
                         nameservers = f" --dns-servers {subnet['nameservers']['namesrv1'].replace(';', ',')}"
 
-                cidr = f"{subnet['subnet']}/{subnet['mask']}"
                 print(f"Scanning subnet {cidr} '{subnet['description']}'.")
-                add_online=0
-                update_online=0
-                update_offline=0
-                addresses = getFromPhpIpam(server, api_client, api_token, f"subnets/{subnet['id']}/addresses")
+                add_online = 0
+                update_online = 0
+                update_offline = 0
+                update_removed = 0
+                addresses = getFromPhpIpam(
+                    server, api_client, api_token, f"subnets/{subnet['id']}/addresses")
 
                 addresses_list = {}
                 excluded_list = []
@@ -181,13 +267,18 @@ while True:
                         if address['excludePing'] == '1':
                             excluded_list.append(address['ip'])
 
-                exclude=''
+                exclude = ''
                 if len(excluded_list) > 0:
-                    exclude=f" --exclude {','.join(excluded_list)}"
-
+                    exclude = f" --exclude {','.join(excluded_list)}"
+                logging.debug("Scan Start")
                 nmap = nmap3.NmapScanTechniques()
-                hosts_list = nmap.nmap_ping_scan(cidr, args=f"-T5{nameservers}{exclude}")
-                nmap_stats = {'runtime': hosts_list['runtime'], 'stats': hosts_list['stats'], 'task_results': hosts_list['task_results']}
+                hosts_list = nmap.nmap_ping_scan(
+                    cidr, args=f"-T5{nameservers}{exclude}")
+                nmap_stats = {
+                    'runtime': hosts_list['runtime'], 'stats': hosts_list['stats'], 'task_results': hosts_list['task_results']}
+
+                logging.debug(f"Scan Stop: {nmap_stats}")
+
                 hosts_list.pop('runtime')
                 hosts_list.pop('stats')
                 hosts_list.pop('task_results')
@@ -195,7 +286,7 @@ while True:
                 if hosts_list is not None and len(hosts_list) > 0:
                     for ip in hosts_list:
                         status = hosts_list[ip]
-                        if 'state' in status['state'] and status['state']['state'] == 'up':
+                        if 'state' in status['state'] and status['state']['state'] == 'up' and status['state']['reason'] != 'reset':
                             hostname = f"ip-{ip.replace('.', '-')}"
                             if len(status['hostname']) > 0 and 'name' in status['hostname'][0]:
                                 hostname = status['hostname'][0]['name']
@@ -236,16 +327,43 @@ while True:
                     if addresses_list is not None and len(addresses_list) > 0:
                         for ip in addresses_list:
                             status = addresses_list[ip]
-                            if status['excludePing'] or status['tag'] == offline_tag:
+                            now_timestamp = datetime.now(pytz.UTC).timestamp()
+                            acceptable_down_gap = now_timestamp - remove_old_host_delay_seconds
+                            last_seen = datetime.strptime(
+                                status['lastSeen'], '%Y-%m-%d %H:%M:%S').timestamp()
+                            if (remove_old_hosts == '1' and
+                                status['tag'] == offline_tag and
+                                acceptable_down_gap < last_seen and
+                                (
+                                    'state' in hosts_list[ip] and
+                                    'state' in hosts_list[ip]['state'] and
+                                    hosts_list[ip]['state']['state'] == 'down'
+                            ) or (
+                                    'state' in hosts_list[ip] and
+                                    'state' in hosts_list[ip]['state'] and
+                                    hosts_list[ip]['state']['state'] == 'up' and
+                                    hosts_list[ip]['state']['reason'] == 'reset'
+                            )
+                            ):
+                                print(deletePhpIpam(server, api_client,
+                                      api_token, 'addresses', status['id'], {}))
+                                update_removed += 1
+                            elif status['excludePing'] or status['tag'] == offline_tag:
                                 pass
                             elif ip not in hosts_list or (
-                            'state' in hosts_list[ip] and
-                            'state' in hosts_list[ip]['state'] and
-                            hosts_list[ip]['state']['state'] == 'down'
-                            ): # Offline
+                                'state' in hosts_list[ip] and
+                                'state' in hosts_list[ip]['state'] and
+                                hosts_list[ip]['state']['state'] == 'down'
+                            ) or (
+                                'state' in hosts_list[ip] and
+                                'state' in hosts_list[ip]['state'] and
+                                hosts_list[ip]['state']['state'] == 'up' and
+                                hosts_list[ip]['state']['reason'] == 'reset'
+                            ):  # Offline
                                 data = {'tag': f"{offline_tag}"}
-                                print(updatePhpIpam(server, api_client, api_token, 'addresses', status['id'], data))
-                                update_offline+=1
+                                print(updatePhpIpam(server, api_client,
+                                      api_token, 'addresses', status['id'], data))
+                                update_offline += 1
 
                 thisTime = str(nowTime())
                 if update_online + add_online + update_offline + update_removed > 0:
@@ -257,4 +375,8 @@ while True:
                     data = {'lastScan': thisTime, 'lastDiscovery': thisTime}
                 else:
                     data = {'lastScan': thisTime}
+                updatePhpIpam(server, api_client, api_token,
+                              'subnets', subnet['id'], data)
+                updatePhpIpam(server, api_client, api_token,
+                              'tools/scanagents', scanagent['id'], {'last_access': thisTime})
     time.sleep(sleep_seconds)
