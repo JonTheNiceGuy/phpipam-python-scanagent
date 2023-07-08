@@ -3,6 +3,7 @@ import re
 import sys
 import time
 import nmap3
+import logging
 import requests
 from parse_it import ParseIt
 from typing import Mapping, Optional, Union
@@ -10,18 +11,23 @@ from datetime import datetime
 
 parser = ParseIt()
 
+logging.basicConfig(
+    level=parser.read_configuration_variable(
+        'LOG_LEVEL', default_value='INFO'),
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 server = parser.read_configuration_variable('IPAM_SERVER')
 api_client = parser.read_configuration_variable('IPAM_API_CLIENT')
 api_token = parser.read_configuration_variable('IPAM_API_TOKEN')
 agent_code = parser.read_configuration_variable('IPAM_API_AGENT_CODE')
-sleep_duration = parser.read_configuration_variable('IPAM_SLEEP_DURATION', default_value='5m')
-always_update_seen_hosts = parser.read_configuration_variable('IPAM_ALWAYS_UPDATE', default_value='1')
+
+logging.info(f"Version: 1.0.0 Author: Jon Spriggs jon@sprig.gs")
 
 if server is None or api_client is None or api_token is None or agent_code is None:
-    sys.stderr.write(f"Missing required environment variables. Halting.\n")
+    logging.error(f"Missing required values. Halting.")
     exit(1)
 
-print(f"Server: {server}, api_client: {api_client}, api_token: {api_token}, agent_code: {agent_code}, sleep_duration: {sleep_duration}, always_update_seen_hosts: {always_update_seen_hosts}")
+logging.info(f"Server: {server}, api_client: {api_client}, api_token: {api_token}, agent_code: {agent_code}, sleep_duration: {sleep_duration}, always_update_seen_hosts: {always_update_seen_hosts}")
 
 sleep_pattern = r'^(([.\d]+)([smh]|))(([.\d]+)([smh])|)(([.\d]+)([smh])|)$'
 
@@ -58,7 +64,7 @@ if sleep_match:
 else:
     raise ValueError(f"Invalid format for sleep duration (got {sleep_duration}")
 
-print(f"Sleep Duration {sleep_duration} = {sleep_seconds} seconds")
+logging.info(f"Sleep Duration {sleep_duration} = {sleep_seconds} seconds")
 
 def getFromPhpIpam(
         server: str,
@@ -85,6 +91,8 @@ def getFromPhpIpam(
     response = requests.get(f"https://{server}/api/{api_client}/{endpoint}", headers=headers, verify=secure)
     return_data = response.json()
     if 'data' in return_data:
+        logging.debug(
+            f"GET {endpoint} requested; (len: {len(return_data['data'])})")
         return return_data['data']
 
 def updatePhpIpam(
@@ -132,9 +140,8 @@ while True:
             break
 
     if scanagentId > 0:
-        sys.stderr.write(f"Scan agent detected: {agent_code}.\n")
-
-        sys.stderr.write(f"Starting run {now()}.\n")
+        logging.info(f"Scan agent detected: {agent_code}.\n")
+        logging.info(f"Starting run {nowTime()}.\n")
 
         tags = getFromPhpIpam(server, api_client, api_token, 'tools/tags')
         subnets = getFromPhpIpam(server, api_client, api_token, 'subnets')
