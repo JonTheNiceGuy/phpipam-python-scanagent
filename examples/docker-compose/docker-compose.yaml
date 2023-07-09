@@ -1,0 +1,12 @@
+version: "3.8"
+
+services:
+  phpipam-scanner:
+    container_name: phpipam-scanner
+    image: ghcr.io/jontheniceguy/publish-packages/phpipam-python-scanagent:latest
+    restart: on-fail
+    environment:
+      IPAM_SERVER: phpipam.example.org
+      IPAM_API_CLIENT: my_api
+      IPAM_API_TOKEN: DECAFbad1234567890abcdefghijklmn
+      IPAM_API_AGENT_CODE: aabbccddeeffgghhIIJJKKLL12345678
