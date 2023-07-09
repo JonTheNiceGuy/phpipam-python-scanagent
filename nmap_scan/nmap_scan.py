@@ -37,7 +37,7 @@ remove_old_hosts = parser.read_configuration_variable(
 remove_old_host_delay = parser.read_configuration_variable(
     'IPAM_REMOVE_OLD_HOST_DELAY', default_value='48h')
 
-logging.info(f"Version: 1.0.2 Author: Jon Spriggs jon@sprig.gs")
+logging.info(f"Version: 1.0.3 Author: Jon Spriggs jon@sprig.gs")
 
 if server is None or api_client is None or api_token is None or agent_code is None:
     logging.error(f"Missing required values. Halting.")
@@ -277,8 +277,8 @@ while True:
                     exclude = f" --exclude {','.join(excluded_list)}"
                 logging.debug("Scan Start")
                 nmap = nmap3.NmapScanTechniques()
-                hosts_list = nmap.nmap_no_portscan(
-                    cidr, args=f"-T5{nameservers}{exclude}")
+                hosts_list = nmap3.scan_command(
+                    cidr, args=f"-sn -T5{nameservers}{exclude}")
                 nmap_stats = {
                     'runtime': hosts_list['runtime'], 'stats': hosts_list['stats'], 'task_results': hosts_list['task_results']}
 
