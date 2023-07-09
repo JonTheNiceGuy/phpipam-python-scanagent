@@ -18,6 +18,11 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 server = parser.read_configuration_variable('IPAM_SERVER')
+insecure_server = parser.read_configuration_variable('IPAM_SERVER_INSECURE', default_value=0)
+if str(insecure_server) != '0':
+    protocol = 'http'
+else:
+    protocol = 'https'
 api_client = parser.read_configuration_variable('IPAM_API_CLIENT')
 api_token = parser.read_configuration_variable('IPAM_API_TOKEN')
 agent_code = parser.read_configuration_variable('IPAM_API_AGENT_CODE')
@@ -32,7 +37,7 @@ remove_old_hosts = parser.read_configuration_variable(
 remove_old_host_delay = parser.read_configuration_variable(
     'IPAM_REMOVE_OLD_HOST_DELAY', default_value='48h')
 
-logging.info(f"Version: 1.0.0 Author: Jon Spriggs jon@sprig.gs")
+logging.info(f"Version: 1.0.1 Author: Jon Spriggs jon@sprig.gs")
 
 if server is None or api_client is None or api_token is None or agent_code is None:
     logging.error(f"Missing required values. Halting.")
@@ -112,7 +117,7 @@ def getFromPhpIpam(
         headers.update(data)
 
     response = requests.get(
-        f"https://{server}/api/{api_client}/{endpoint}", headers=headers, verify=secure)
+        f"{protocol}://{server}/api/{api_client}/{endpoint}", headers=headers, verify=secure)
     return_data = response.json()
     if 'data' in return_data:
         logging.debug(
@@ -134,7 +139,7 @@ def deletePhpIpam(
     }
 
     response = requests.delete(
-        f"https://{server}/api/{api_client}/{endpoint}/{id}/", headers=headers, data=data, verify=secure)
+        f"{protocol}://{server}/api/{api_client}/{endpoint}/{id}/", headers=headers, data=data, verify=secure)
     try:
         logging.debug(
             f"DELETE {endpoint}/{id} requested with {data}; {response.json()}")
@@ -157,7 +162,7 @@ def updatePhpIpam(
     }
 
     response = requests.patch(
-        f"https://{server}/api/{api_client}/{endpoint}/{id}/", headers=headers, data=data, verify=secure)
+        f"{protocol}://{server}/api/{api_client}/{endpoint}/{id}/", headers=headers, data=data, verify=secure)
     try:
         logging.debug(
             f"PATCH {endpoint}/{id} requested with {data}; {response.json()}")
@@ -179,7 +184,7 @@ def createPhpIpam(
     }
 
     response = requests.post(
-        f"https://{server}/api/{api_client}/{endpoint}/", headers=headers, data=data, verify=secure)
+        f"{protocol}://{server}/api/{api_client}/{endpoint}/", headers=headers, data=data, verify=secure)
     try:
         logging.debug(
             f"POST {endpoint} requested with {data}; {response.json()}")
