@@ -37,7 +37,7 @@ remove_old_hosts = parser.read_configuration_variable(
 remove_old_host_delay = parser.read_configuration_variable(
     'IPAM_REMOVE_OLD_HOST_DELAY', default_value='48h')
 
-logging.info(f"Version: 1.0.8 Author: Jon Spriggs jon@sprig.gs")
+logging.info(f"Version: 1.0.9 Author: Jon Spriggs jon@sprig.gs")
 
 if server is None or api_client is None or api_token is None or agent_code is None:
     logging.error(f"Missing required values. Halting.")
@@ -89,10 +89,9 @@ time_between_scans_seconds = time_match(min_time_between_scans)
 logging.info(
     f"Time between scans {min_time_between_scans} = {time_between_scans_seconds} seconds = {time_between_scans_seconds / 60} minutes")
 
-if remove_old_hosts == '1':
-    remove_old_host_delay_seconds = time_match(remove_old_host_delay)
-    logging.info(
-        f"Remove old host delay {remove_old_host_delay} = {remove_old_host_delay_seconds} seconds = {remove_old_host_delay_seconds / 60} minutes = {remove_old_host_delay_seconds / 60 / 60} hours")
+remove_old_host_delay_seconds = time_match(remove_old_host_delay)
+logging.info(
+    f"Remove old host delay {remove_old_host_delay} = {remove_old_host_delay_seconds} seconds = {remove_old_host_delay_seconds / 60} minutes = {remove_old_host_delay_seconds / 60 / 60} hours")
 
 def getFromPhpIpam(
     server: str,
